@@ -857,18 +857,11 @@ function Auditoria({ usuario, onLogout }) {
               <input
                 type="text"
                 name="empresa"
-                list="empresas-list"
-                placeholder="Selecciona o escribe..."
+                placeholder="Escribe o selecciona empresa..."
                 value={formData.empresa}
                 onChange={handleFormChange}
                 className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none"
               />
-              <datalist id="empresas-list">
-                <option value="10 AL NORTE" />
-                <option value="GRIS VERDE" />
-                <option value="VIVETEXTIL" />
-                <option value="GREENT" />
-              </datalist>
             </div>
 
             <div className="space-y-1.5">
