@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos generales de Crearte By Confeccionarte */
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f5f5f4;
+  color: #0a0a0a;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* En celulares todo se ve un poco más compacto */
+@media (max-width: 640px) {
+  html { font-size: 15px; }
+
+  /* 16px evita que iPhone haga zoom al tocar un campo */
+  input, select, textarea { font-size: 16px !important; }
+}
+
+/* Transiciones suaves en campos de entrada y botones */
+input, select, textarea {
+  font-family: inherit;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #EAB308 !important;
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.35) !important;
+}
+
+button {
+  font-family: inherit;
+  transition: all 0.15s ease-in-out;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+/* ---------- Tema amarillo / negro ---------- */
+
+/* Botones y logo principales: fondo negro con texto amarillo */
+.bg-indigo-600.text-white {
+  color: #FACC15;
+}
+
+button.bg-indigo-600 {
+  border: 1px solid #FACC15;
+}
+
+button.bg-indigo-600:hover {
+  background-color: #000000;
+}
+
+/* Franja amarilla bajo el encabezado */
+header {
+  border-bottom: 3px solid #FACC15 !important;
+}
+
+/* Barra de desplazamiento */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: #f5f5f4; }
+::-webkit-scrollbar-thumb { background: #a8a29e; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #EAB308; }
