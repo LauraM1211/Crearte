@@ -88,7 +88,7 @@ function Auditoria({ usuario, onLogout }) {
   const [archivosExtra, setArchivosExtra] = useState([]);
   const [empresaSugerencias, setEmpresaSugerencias] = useState(false);
 
-  const EMPRESAS = ['10 AL NORTE SAS', 'CONFECCIONARTE SAS', 'CREARTE SAS', 'TEXTILES MEDELLÍN', 'INDUSTRIAS TEXTILES'];
+  const EMPRESAS = ['10 AL NORTE', 'VIVETEXTIL', 'GREENT', 'GRIS VERDE'];
 
   const initialFormData = {
     empresa: '',
@@ -857,33 +857,44 @@ function Auditoria({ usuario, onLogout }) {
           <div className="p-4 sm:p-6 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
             <div className="space-y-1.5 col-span-2 lg:col-span-1 relative">
               <label className="text-xs font-bold text-slate-600 uppercase">Empresa</label>
-              <input
-                type="text"
-                name="empresa"
-                placeholder="Escribe o selecciona empresa..."
-                value={formData.empresa}
-                autoComplete="off"
-                onChange={(e) => { handleFormChange(e); setEmpresaSugerencias(true); }}
-                onFocus={() => setEmpresaSugerencias(true)}
-                onBlur={() => setTimeout(() => setEmpresaSugerencias(false), 150)}
-                className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none"
-              />
-              {empresaSugerencias && (() => {
-                const filtradas = EMPRESAS.filter(e => e.toLowerCase().includes((formData.empresa || '').toLowerCase()));
-                return filtradas.length > 0 ? (
-                  <ul className="absolute z-20 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg mt-1 overflow-hidden">
-                    {filtradas.map(emp => (
-                      <li
-                        key={emp}
-                        onMouseDown={() => { setFormData(prev => ({ ...prev, empresa: emp })); setEmpresaSugerencias(false); }}
-                        className="px-3 py-2 text-sm text-slate-800 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer font-medium"
-                      >
-                        {emp}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null;
-              })()}
+              <div className="relative">
+                <input
+                  type="text"
+                  name="empresa"
+                  placeholder="Escribe o selecciona planta..."
+                  value={formData.empresa}
+                  autoComplete="off"
+                  onChange={(e) => { handleFormChange(e); setEmpresaSugerencias(true); }}
+                  onFocus={() => setEmpresaSugerencias(true)}
+                  onBlur={() => setTimeout(() => setEmpresaSugerencias(false), 150)}
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-xl p-2.5 pr-8 focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none"
+                />
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); setEmpresaSugerencias(v => !v); }}
+                  className="absolute inset-y-0 right-0 px-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                {empresaSugerencias && (() => {
+                  const filtradas = formData.empresa
+                    ? EMPRESAS.filter(e => e.toLowerCase().includes(formData.empresa.toLowerCase()))
+                    : EMPRESAS;
+                  return filtradas.length > 0 ? (
+                    <ul className="absolute z-20 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg mt-1 overflow-hidden">
+                      {filtradas.map(emp => (
+                        <li
+                          key={emp}
+                          onMouseDown={() => { setFormData(prev => ({ ...prev, empresa: emp })); setEmpresaSugerencias(false); }}
+                          className="px-3 py-2 text-sm text-slate-800 hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer font-medium"
+                        >
+                          {emp}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null;
+                })()}
+              </div>
             </div>
 
             <div className="space-y-1.5">
