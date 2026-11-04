@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import Login from './Login.jsx';
+import Login from './login.jsx';
 import Verificacion from './verificacion.jsx';
 import { sesionActual, cerrarSesion } from './auth.js';
-import { generarPdfAuditoria, nombreArchivoPdf } from './reportePdf.js';
+import { generarPdfAuditoria, nombreArchivoPdf } from './reportepdf.js';
 import { guardarEnFirestore, cargarDeFirestore, eliminarDeFirestore, esAdmin } from './db.js';
 const EMAILJS_SERVICE_ID  = 'service_31xahnu';
 const EMAILJS_TEMPLATE_ID = 'template_nlyhaax';
