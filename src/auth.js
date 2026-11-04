@@ -45,7 +45,7 @@ export const SEGUNDOS_REENVIO = 60;
 // Después de verificar el correo, el usuario regresará al login.
 const configuracionVerificacion = {
   url: `${window.location.origin}/verificacion`,
-  handleCodeInApp: false
+  handleCodeInApp: true
 };
 
 // ============================================================
