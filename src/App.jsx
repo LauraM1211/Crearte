@@ -854,18 +854,21 @@ function Auditoria({ usuario, onLogout }) {
           <div className="p-4 sm:p-6 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
             <div className="space-y-1.5 col-span-2 lg:col-span-1">
               <label className="text-xs font-bold text-slate-600 uppercase">Empresa</label>
-              <select 
-                name="empresa" 
-                value={formData.empresa} 
+              <input
+                type="text"
+                name="empresa"
+                list="empresas-list"
+                placeholder="Selecciona o escribe..."
+                value={formData.empresa}
                 onChange={handleFormChange}
-                className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none cursor-pointer"
-              >
-                <option value="">-- Seleccionar Empresa --</option>
-                <option value="10 AL NORTE">10 AL NORTE</option>
-                <option value="GRIS VERDE">GRIS VERDE</option>
-                <option value="VIVETEXTIL">VIVETEXTIL</option>
-                <option value="GREENT">GREENT</option>
-              </select>
+                className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-xl p-2.5 focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none"
+              />
+              <datalist id="empresas-list">
+                <option value="10 AL NORTE" />
+                <option value="GRIS VERDE" />
+                <option value="VIVETEXTIL" />
+                <option value="GREENT" />
+              </datalist>
             </div>
 
             <div className="space-y-1.5">
