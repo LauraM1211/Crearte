@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   iniciarRegistro,
   iniciarSesion,
@@ -24,6 +24,7 @@ export default function Login({ onAuth }) {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState(() => leerUltimoCorreo());
   const [clave, setClave] = useState('');
+  const claveRef = useRef(null);
   const [codigo, setCodigo] = useState('');
   const [verClave, setVerClave] = useState(false);
   const [error, setError] = useState('');
@@ -31,6 +32,10 @@ export default function Login({ onAuth }) {
   const [cargando, setCargando] = useState(false);
 
   const esRegistro = modo === 'registro';
+
+  useEffect(() => {
+    if (!esRegistro) claveRef.current?.focus();
+  }, [esRegistro]);
 
   const cambiarModo = (m) => { setModo(m); setError(''); setAviso(''); };
 
@@ -131,6 +136,7 @@ export default function Login({ onAuth }) {
               <label className="text-xs font-bold text-zinc-600">Contraseña</label>
               <div className="relative">
                 <input
+                  ref={claveRef}
                   type={verClave ? 'text' : 'password'}
                   autoComplete={esRegistro ? 'new-password' : 'current-password'}
                   autoFocus={!esRegistro && !!email}

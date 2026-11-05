@@ -203,6 +203,12 @@ export const iniciarRegistro = async ({
     console.error(e);
   }
 
+  try {
+    await signOut(auth);
+  } catch (e) {
+    return { ok: false, error: traducirError(e) };
+  }
+
   return {
     ok: true,
     usuario: {
