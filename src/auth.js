@@ -4,49 +4,20 @@
 // Firebase Authentication
 // ============================================================
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
-
 import {
   getAuth,
   initializeAuth,
   inMemoryPersistence,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile,
-  signOut,
-  applyActionCode
+  signOut
 } from 'firebase/auth';
-
-// ============================================================
-// 1. CONFIGURACIÓN DE FIREBASE
-// ============================================================
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBto76CL6z3R3ov-kZQhkkc6dnjEEFQWao",
-  authDomain: "crearte-by-confeccionart.firebaseapp.com",
-  projectId: "crearte-by-confeccionart",
-  storageBucket: "crearte-by-confeccionart.firebasestorage.app",
-  messagingSenderId: "581387720024",
-  measurementId: "G-PM07VM0DSH"
-};
+import { app } from './firebase.js';
 
 // Código de invitación. Déjalo vacío para permitir registro libre.
 export const CODIGO_INVITACION = '';
-
-// Tiempo de espera para reenviar el correo.
-export const SEGUNDOS_REENVIO = 60;
-
-// ============================================================
-// 2. DIRECCIÓN DE REDIRECCIÓN
-// ============================================================
-
-// Después de verificar el correo, el usuario regresará al login.
-const configuracionVerificacion = {
-  url: `${window.location.origin}/verificacion`,
-  handleCodeInApp: true
-};
 
 // ============================================================
 // 3. UTILIDADES
@@ -82,14 +53,6 @@ let _auth = null;
 const obtenerAuth = () => {
   if (_auth) return _auth;
 
-  if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-    return null;
-  }
-
-  const app = getApps().length
-    ? getApp()
-    : initializeApp(firebaseConfig);
-
   try {
     _auth = initializeAuth(app, {
       persistence: inMemoryPersistence
@@ -107,6 +70,10 @@ const obtenerAuth = () => {
 
 const traducirError = (e) => {
   console.error(e);
+
+  if (e && typeof e.code === 'string' && e.code.startsWith('auth/api-key-not-valid')) {
+    return 'La clave de Firebase no es válida. Revisa la configuración del proyecto Firebase.';
+  }
 
   switch (e && e.code) {
     case 'auth/email-already-in-use':
@@ -127,6 +94,9 @@ const traducirError = (e) => {
     case 'auth/too-many-requests':
       return 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
 
+    case 'auth/user-disabled':
+      return 'Esta cuenta está deshabilitada. Contacta al administrador.';
+
     case 'auth/network-request-failed':
       return 'Sin conexión a internet. Revisa tu red e inténtalo de nuevo.';
 
@@ -136,12 +106,14 @@ const traducirError = (e) => {
     case 'auth/unauthorized-domain':
       return 'Este dominio no está autorizado en Firebase. Agrégalo en Dominios autorizados.';
 
-    case 'auth/api-key-not-valid':
     case 'auth/invalid-api-key':
     case 'auth/configuration-not-found':
       return 'La configuración de Firebase no es correcta. Revisa firebaseConfig en auth.js.';
 
     default:
+      if (e && typeof e.code === 'string') {
+        return `Firebase rechazó el acceso (${e.code}).`;
+      }
       return 'No se pudo completar la acción. Intenta de nuevo.';
   }
 };
@@ -231,161 +203,17 @@ export const iniciarRegistro = async ({
     console.error(e);
   }
 
-  try {
-    // Envía el correo con la configuración de redirección.
-    await sendEmailVerification(
-      cred.user,
-      configuracionVerificacion
-    );
-  } catch (e) {
-    console.error('Error sendEmailVerification:', e.code, e.message);
-
-    return {
-      ok: true,
-      pendiente: { email: correo },
-      aviso: 'La cuenta se creó, pero no se pudo enviar el correo. Pulsa Reenviar correo.'
-    };
-  }
-
   return {
     ok: true,
-    pendiente: { email: correo }
+    usuario: {
+      email: cred.user.email,
+      nombre: nombreDe(cred.user)
+    }
   };
 };
 
 // ============================================================
-// 7. PROCESAR VERIFICACIÓN DEL CORREO
-// ============================================================
-
-// Esta función se ejecuta cuando el usuario llega a /verificacion.
-export const procesarVerificacion = async () => {
-  const auth = obtenerAuth();
-
-  if (!auth) {
-    return {
-      ok: false,
-      error: MSG_SIN_CONFIG
-    };
-  }
-
-  const parametros = new URLSearchParams(window.location.search);
-
-  const codigo = parametros.get('oobCode');
-  const modo = parametros.get('mode');
-
-  if (modo !== 'verifyEmail' || !codigo) {
-    return {
-      ok: false,
-      error: 'El enlace de verificación no es válido.'
-    };
-  }
-
-  try {
-    // Firebase confirma la verificación del correo.
-    await applyActionCode(auth, codigo);
-
-    return {
-      ok: true,
-      mensaje: '¡Tu correo fue verificado correctamente!'
-    };
-  } catch (e) {
-    console.error(e);
-
-    return {
-      ok: false,
-      error: 'El enlace expiró, no es válido o ya fue utilizado.'
-    };
-  }
-};
-
-// ============================================================
-// 8. COMPROBAR VERIFICACIÓN
-// ============================================================
-
-export const comprobarVerificacion = async () => {
-  const auth = obtenerAuth();
-
-  if (!auth) {
-    return { ok: false, error: MSG_SIN_CONFIG };
-  }
-
-  const user = auth.currentUser;
-
-  if (!user) {
-    return {
-      ok: false,
-      error: 'La sesión de verificación se cerró. Ingresa con tu correo y contraseña.',
-      reiniciar: true
-    };
-  }
-
-  try {
-    await user.reload();
-  } catch (e) {
-    return {
-      ok: false,
-      error: traducirError(e)
-    };
-  }
-
-  if (!auth.currentUser || !auth.currentUser.emailVerified) {
-    return {
-      ok: false,
-      error: 'Aún no aparece verificado. Abre el enlace del correo y vuelve a intentarlo.'
-    };
-  }
-
-  const usuario = {
-    email: auth.currentUser.email,
-    nombre: nombreDe(auth.currentUser)
-  };
-
-  await cerrarSesion();
-
-  return {
-    ok: true,
-    usuario
-  };
-};
-
-// ============================================================
-// 9. REENVIAR CORREO DE VERIFICACIÓN
-// ============================================================
-
-export const reenviarVerificacion = async () => {
-  const auth = obtenerAuth();
-
-  if (!auth) {
-    return { ok: false, error: MSG_SIN_CONFIG };
-  }
-
-  if (!auth.currentUser) {
-    return {
-      ok: false,
-      error: 'La sesión se cerró. Ingresa con tu correo y contraseña.',
-      reiniciar: true
-    };
-  }
-
-  try {
-    await sendEmailVerification(
-      auth.currentUser,
-      configuracionVerificacion
-    );
-
-    return { ok: true };
-  } catch (e) {
-    return {
-      ok: false,
-      error: traducirError(e)
-    };
-  }
-};
-
-export const cancelarVerificacion = cerrarSesion;
-
-// ============================================================
-// 10. INICIAR SESIÓN
+// 7. INICIAR SESIÓN
 // ============================================================
 
 export const iniciarSesion = async ({ email, clave }) => {
@@ -428,15 +256,6 @@ export const iniciarSesion = async ({ email, clave }) => {
 
   guardarUltimoCorreo(correo);
 
-  // No permite ingresar si el correo no está verificado.
-  if (!cred.user.emailVerified) {
-    return {
-      ok: false,
-      noVerificado: true,
-      error: 'Tu correo aún no está verificado.'
-    };
-  }
-
   return {
     ok: true,
     usuario: {
@@ -447,7 +266,7 @@ export const iniciarSesion = async ({ email, clave }) => {
 };
 
 // ============================================================
-// 11. RECUPERAR CONTRASEÑA
+// 8. RECUPERAR CONTRASEÑA
 // ============================================================
 
 export const recuperarClave = async (email) => {

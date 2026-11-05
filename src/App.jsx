@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Login from './login.jsx';
-import Verificacion from './verificacion.jsx';
 import { sesionActual, cerrarSesion } from './auth.js';
 import { generarPdfAuditoria, nombreArchivoPdf } from './reportepdf.js';
 import { guardarEnFirestore, cargarDeFirestore, eliminarDeFirestore, esAdmin } from './db.js';
@@ -871,7 +870,7 @@ function Auditoria({ usuario, onLogout }) {
                 />
                 <button
                   type="button"
-                  onMouseDown={(e) => { e.preventDefault(); setEmpresaSugerencias(v => !v); }}
+                  onMouseDown={(e) => { e.preventDefault(); setFormData(prev => ({ ...prev, empresa: '' })); setEmpresaSugerencias(true); }}
                   className="absolute inset-y-0 right-0 px-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
@@ -1841,7 +1840,6 @@ export default function App() {
     setUsuario(null);
   };
 
-  if (window.location.pathname === '/verificacion') return <Verificacion />;
   if (!usuario) return <Login onAuth={setUsuario} />;
   return <Auditoria usuario={usuario} onLogout={salir} />;
 }

@@ -1,4 +1,3 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getFirestore,
   collection,
@@ -10,19 +9,10 @@ import {
   where,
   orderBy
 } from 'firebase/firestore';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBto76CL6z3R3ov-kZQhkkc6dnjEEFQWao",
-  authDomain: "crearte-by-confeccionart.firebaseapp.com",
-  projectId: "crearte-by-confeccionart",
-  storageBucket: "crearte-by-confeccionart.firebasestorage.app",
-  messagingSenderId: "581387720024",
-  measurementId: "G-PM07VM0DSH"
-};
+import { app } from './firebase.js';
 
 const ADMIN_EMAIL = 'grupocontable2130@gmail.com';
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 export const esAdmin = (email) =>

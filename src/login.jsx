@@ -1,14 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   iniciarRegistro,
-  comprobarVerificacion,
-  reenviarVerificacion,
-  cancelarVerificacion,
   iniciarSesion,
   recuperarClave,
   leerUltimoCorreo,
-  CODIGO_INVITACION,
-  SEGUNDOS_REENVIO
+  CODIGO_INVITACION
 } from './auth.js';
 
 const IconoOjo = ({ abierto }) =>
@@ -25,7 +21,6 @@ const IconoOjo = ({ abierto }) =>
 
 export default function Login({ onAuth }) {
   const [modo, setModo] = useState('ingresar');
-  const [paso, setPaso] = useState('formulario');
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState(() => leerUltimoCorreo());
   const [clave, setClave] = useState('');
@@ -34,23 +29,10 @@ export default function Login({ onAuth }) {
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
   const [cargando, setCargando] = useState(false);
-  const [segundos, setSegundos] = useState(0);
 
   const esRegistro = modo === 'registro';
 
-  useEffect(() => {
-    if (segundos <= 0) return undefined;
-    const t = setTimeout(() => setSegundos(s => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [segundos]);
-
   const cambiarModo = (m) => { setModo(m); setError(''); setAviso(''); };
-
-  const terminarVerificacion = () => {
-    setPaso('formulario'); setModo('ingresar'); setClave('');
-    setVerClave(false); setError('');
-    setAviso('Correo verificado. Escribe tu contraseña para confirmar que eres tú.');
-  };
 
   const enviar = async (e) => {
     e.preventDefault(); setError(''); setAviso(''); setCargando(true);
@@ -58,38 +40,8 @@ export default function Login({ onAuth }) {
       ? await iniciarRegistro({ nombre, email, clave, codigo })
       : await iniciarSesion({ email, clave });
     setCargando(false);
-    if (!res.ok && res.noVerificado) {
-      setPaso('verificar'); setSegundos(0);
-      setAviso('Tu correo aún no está verificado. Abre el enlace que te enviamos o pide uno nuevo.');
-      return;
-    }
     if (!res.ok) { setError(res.error); return; }
-    if (esRegistro) {
-      setPaso('verificar'); setSegundos(SEGUNDOS_REENVIO);
-      if (res.aviso) setAviso(res.aviso);
-      return;
-    }
     onAuth(res.usuario);
-  };
-
-  const yaVerifique = async () => {
-    setError(''); setAviso(''); setCargando(true);
-    const res = await comprobarVerificacion();
-    setCargando(false);
-    if (!res.ok) { setError(res.error); if (res.reiniciar) setPaso('formulario'); return; }
-    terminarVerificacion();
-  };
-
-  const reenviar = async () => {
-    setError(''); setAviso(''); setCargando(true);
-    const res = await reenviarVerificacion();
-    setCargando(false);
-    if (!res.ok) { setError(res.error); if (res.reiniciar) setPaso('formulario'); return; }
-    setSegundos(SEGUNDOS_REENVIO); setAviso('Te enviamos un correo nuevo.');
-  };
-
-  const cambiarCorreo = async () => {
-    await cancelarVerificacion(); setPaso('formulario'); setError(''); setAviso('');
   };
 
   const olvideClave = async () => {
@@ -117,66 +69,7 @@ export default function Login({ onAuth }) {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-5 sm:p-6">
-          {paso === 'verificar' ? (
-            <div className="space-y-4">
-              <div className="text-center">
-                <div className="w-12 h-12 mx-auto rounded-full bg-yellow-50 border border-yellow-400 flex items-center justify-center text-yellow-500">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <h2 className="mt-3 text-lg font-bold text-zinc-900">Revisa tu correo</h2>
-                <p className="text-sm text-zinc-500 mt-1">
-                  Enviamos un enlace de verificación a <strong className="text-zinc-800 break-all">{email.trim().toLowerCase()}</strong>.
-                  Ábrelo y luego vuelve aquí. Si no lo ves, revisa spam.
-                </p>
-              </div>
-
-              {aviso && !error && (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium rounded-xl px-3.5 py-2.5">
-                  {aviso}
-                </div>
-              )}
-              {error && (
-                <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium rounded-xl px-3.5 py-2.5">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={yaVerifique}
-                disabled={cargando}
-                className="w-full bg-yellow-400 hover:bg-yellow-300 disabled:opacity-60 text-black font-bold py-3 rounded-xl text-base transition-colors shadow-md cursor-pointer"
-              >
-                {cargando ? 'Un momento...' : 'Ya verifiqué mi correo'}
-              </button>
-
-              <div className="flex items-center justify-between text-sm">
-                <button
-                  type="button"
-                  onClick={reenviar}
-                  disabled={cargando || segundos > 0}
-                  className="font-semibold text-yellow-600 disabled:text-zinc-400 cursor-pointer"
-                >
-                  {segundos > 0 ? `Reenviar en ${segundos} s` : 'Reenviar correo'}
-                </button>
-                <button
-                  type="button"
-                  onClick={cambiarCorreo}
-                  className="font-semibold text-zinc-500 hover:text-zinc-700 cursor-pointer"
-                >
-                  Usar otro correo
-                </button>
-              </div>
-
-              <p className="text-xs text-zinc-400 text-center">
-                Si esta página se cerró mientras verificabas, solo ingresa con tu correo y contraseña.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-xl mb-5">
+          <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-xl mb-5">
                 <button
                   type="button"
                   onClick={() => cambiarModo('ingresar')}
@@ -294,9 +187,7 @@ export default function Login({ onAuth }) {
                 >
                   {cargando ? 'Un momento...' : esRegistro ? 'Crear cuenta' : 'Confirmar y entrar'}
                 </button>
-              </form>
-            </>
-          )}
+          </form>
         </div>
 
         <p className="text-center text-xs text-zinc-400 mt-5">
