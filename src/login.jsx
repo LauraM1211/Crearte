@@ -41,6 +41,15 @@ export default function Login({ onAuth }) {
       : await iniciarSesion({ email, clave });
     setCargando(false);
     if (!res.ok) { setError(res.error); return; }
+    if (esRegistro) {
+      setModo('ingresar');
+      setNombre('');
+      setClave('');
+      setCodigo('');
+      setVerClave(false);
+      setAviso('Cuenta creada. Ingresa con tu correo y contraseña.');
+      return;
+    }
     onAuth(res.usuario);
   };
 
