@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // Archivos donde Tailwind busca nombres de clases para incluirlas en el CSS final.
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
@@ -7,6 +8,7 @@ export default {
       // El código usa clases "indigo-*" y "slate-*"; aquí se redefinen
       // para que toda la app cambie de color sin editar App.jsx ni Login.jsx.
       colors: {
+        // Reasigna tonos indigo usados por la interfaz a la marca amarilla/negra.
         indigo: {
           50: '#FFFBEB',
           100: '#FEF3C7',
@@ -20,6 +22,7 @@ export default {
           900: '#000000',
           950: '#000000'
         },
+        // Ajusta los tonos oscuros slate usados como fondos y textos de la aplicación.
         slate: {
           700: '#262626',
           800: '#171717',
@@ -29,5 +32,6 @@ export default {
       }
     }
   },
+  // No se agregan plugins adicionales de Tailwind.
   plugins: []
 };

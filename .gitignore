@@ -1,2 +1,4 @@
+# Dependencias instaladas por npm; pueden regenerarse desde package-lock.json.
 node_modules/
+# Archivos de producción generados por Vite al ejecutar npm run build.
 dist/

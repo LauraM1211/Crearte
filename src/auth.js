@@ -1,9 +1,9 @@
 
-// ============================================================
-// AUTENTICACIÓN DE CREARTE BY CONFECCIONARTE
-// Firebase Authentication
-// ============================================================
+// Este módulo concentra las operaciones de cuenta para que los componentes de interfaz
+// no tengan que llamar directamente a Firebase Authentication.
 
+// Importa la inicialización, persistencia en memoria, registro, acceso,
+// recuperación de clave, edición del perfil y cierre de sesión de Firebase.
 import {
   getAuth,
   initializeAuth,
@@ -14,17 +14,17 @@ import {
   updateProfile,
   signOut
 } from 'firebase/auth';
+// Usa la misma instancia de Firebase que emplea Firestore en el resto de la aplicación.
 import { app } from './firebase.js';
 
-// Código de invitación. Déjalo vacío para permitir registro libre.
+// Si contiene un valor, el registro exige que el usuario escriba exactamente ese código.
+// Al estar vacío, iniciarRegistro permite crear cuentas sin invitación.
 export const CODIGO_INVITACION = '';
 
-// ============================================================
-// 3. UTILIDADES
-// ============================================================
-
+// Clave de almacenamiento local que recuerda solo el correo, nunca la contraseña.
 const LAST_EMAIL_KEY = 'crearte_ultimo_correo';
 
+// Lee el último correo utilizado; localStorage puede no estar disponible en ciertos contextos.
 export const leerUltimoCorreo = () => {
   try {
     return localStorage.getItem(LAST_EMAIL_KEY) || '';
@@ -33,6 +33,7 @@ export const leerUltimoCorreo = () => {
   }
 };
 
+// Guarda el correo para precargarlo la próxima vez que se muestre el formulario de acceso.
 const guardarUltimoCorreo = (correo) => {
   try {
     localStorage.setItem(LAST_EMAIL_KEY, correo);
@@ -41,40 +42,45 @@ const guardarUltimoCorreo = (correo) => {
   }
 };
 
+// Comprueba el formato general del correo antes de llamar a Firebase.
 const emailValido = (email) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
+// Mensaje compartido cuando no se puede obtener una instancia de autenticación utilizable.
 const MSG_SIN_CONFIG =
   'Firebase aún no está configurado. Revisa firebaseConfig en auth.js.';
 
+// Caché del objeto Auth para reutilizar la instancia durante la vida de la página.
 let _auth = null;
 
+// Inicializa Auth con persistencia en memoria o recupera la instancia existente.
 const obtenerAuth = () => {
   if (_auth) return _auth;
 
   try {
+    // La sesión se pierde al cerrar o recargar la página; no queda persistida en el navegador.
     _auth = initializeAuth(app, {
       persistence: inMemoryPersistence
     });
   } catch {
+    // Firebase puede haber inicializado Auth previamente; en ese caso se recupera esa instancia.
     _auth = getAuth(app);
   }
 
   return _auth;
 };
 
-// ============================================================
-// 4. TRADUCCIÓN DE ERRORES
-// ============================================================
-
+// Registra el error técnico y devuelve un mensaje entendible para mostrar en el formulario.
 const traducirError = (e) => {
   console.error(e);
 
+  // Algunos errores de clave inválida traen un código más específico.
   if (e && typeof e.code === 'string' && e.code.startsWith('auth/api-key-not-valid')) {
     return 'La clave de Firebase no es válida. Revisa la configuración del proyecto Firebase.';
   }
 
+  // Convierte los códigos conocidos de Firebase en instrucciones en español.
   switch (e && e.code) {
     case 'auth/email-already-in-use':
       return 'Ese correo ya tiene una cuenta. Ingresa con tu contraseña.';
@@ -111,6 +117,7 @@ const traducirError = (e) => {
       return 'La configuración de Firebase no es correcta. Revisa firebaseConfig en auth.js.';
 
     default:
+      // Si existe un código no contemplado, lo conserva para facilitar el diagnóstico.
       if (e && typeof e.code === 'string') {
         return `Firebase rechazó el acceso (${e.code}).`;
       }
@@ -118,17 +125,15 @@ const traducirError = (e) => {
   }
 };
 
+// Obtiene el nombre visible del perfil o usa la parte anterior a @ como alternativa.
 const nombreDe = (user) => {
   return user.displayName || (user.email || '').split('@')[0];
 };
 
-// ============================================================
-// 5. SESIÓN
-// ============================================================
-
-// La sesión vive solo en memoria.
+// La sesión vive en Firebase Auth en memoria; esta función no restaura un usuario al recargar.
 export const sesionActual = () => null;
 
+// Cierra la sesión actual. Los fallos se dejan en consola para diagnóstico.
 export const cerrarSesion = async () => {
   const auth = obtenerAuth();
 
@@ -141,18 +146,17 @@ export const cerrarSesion = async () => {
   }
 };
 
-// ============================================================
-// 6. REGISTRO DE USUARIOS
-// ============================================================
-
+// Valida y crea una cuenta nueva; devuelve un objeto { ok, usuario/error } para la interfaz.
 export const iniciarRegistro = async ({
   nombre,
   email,
   clave,
   codigo
 }) => {
+  // Normaliza el correo para evitar diferencias por espacios o mayúsculas.
   const correo = String(email || '').trim().toLowerCase();
 
+  // Valida por orden los campos obligatorios antes de comunicarse con el servicio.
   if (!nombre || !nombre.trim()) {
     return { ok: false, error: 'Escribe tu nombre.' };
   }
@@ -168,6 +172,7 @@ export const iniciarRegistro = async ({
     };
   }
 
+  // El código solo se exige si CODIGO_INVITACION fue configurado con un valor.
   if (CODIGO_INVITACION && codigo !== CODIGO_INVITACION) {
     return {
       ok: false,
@@ -181,9 +186,11 @@ export const iniciarRegistro = async ({
     return { ok: false, error: MSG_SIN_CONFIG };
   }
 
+  // cred contiene el usuario que Firebase devuelve al crear la cuenta.
   let cred;
 
   try {
+    // Crea la cuenta en el proveedor de correo y contraseña de Firebase.
     cred = await createUserWithEmailAndPassword(
       auth,
       correo,
@@ -193,9 +200,11 @@ export const iniciarRegistro = async ({
     return { ok: false, error: traducirError(e) };
   }
 
+  // Recuerda el correo incluso si la actualización opcional del perfil no funciona.
   guardarUltimoCorreo(correo);
 
   try {
+    // Asigna el nombre indicado para que la aplicación lo muestre como identidad del auditor.
     await updateProfile(cred.user, {
       displayName: nombre.trim()
     });
@@ -204,6 +213,7 @@ export const iniciarRegistro = async ({
   }
 
   try {
+    // El registro crea la cuenta pero devuelve al usuario a la pantalla de ingreso.
     await signOut(auth);
   } catch (e) {
     return { ok: false, error: traducirError(e) };
@@ -218,11 +228,9 @@ export const iniciarRegistro = async ({
   };
 };
 
-// ============================================================
-// 7. INICIAR SESIÓN
-// ============================================================
-
+// Valida las credenciales e inicia sesión; el resultado exitoso contiene email y nombre.
 export const iniciarSesion = async ({ email, clave }) => {
+  // Normaliza el email igual que durante el registro.
   const correo = String(email || '').trim().toLowerCase();
 
   if (!emailValido(correo)) {
@@ -248,6 +256,7 @@ export const iniciarSesion = async ({ email, clave }) => {
   let cred;
 
   try {
+    // Firebase verifica las credenciales y abre la sesión en memoria.
     cred = await signInWithEmailAndPassword(
       auth,
       correo,
@@ -260,6 +269,7 @@ export const iniciarSesion = async ({ email, clave }) => {
     };
   }
 
+  // Facilita el próximo acceso sin guardar la contraseña.
   guardarUltimoCorreo(correo);
 
   return {
@@ -271,11 +281,9 @@ export const iniciarSesion = async ({ email, clave }) => {
   };
 };
 
-// ============================================================
-// 8. RECUPERAR CONTRASEÑA
-// ============================================================
-
+// Solicita a Firebase que envíe el flujo de restablecimiento al correo indicado.
 export const recuperarClave = async (email) => {
+  // Se aplican las mismas reglas de formato y normalización que al ingresar.
   const correo = String(email || '').trim().toLowerCase();
 
   if (!emailValido(correo)) {
@@ -292,6 +300,7 @@ export const recuperarClave = async (email) => {
   }
 
   try {
+    // Firebase gestiona el envío del enlace; aquí solo se devuelve el resultado a la interfaz.
     await sendPasswordResetEmail(auth, correo);
 
     return { ok: true };

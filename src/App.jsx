@@ -3,10 +3,13 @@ import Login from './login.jsx';
 import { sesionActual, cerrarSesion } from './auth.js';
 import { generarPdfAuditoria, nombreArchivoPdf } from './reportepdf.js';
 import { guardarEnFirestore, cargarDeFirestore, eliminarDeFirestore, esAdmin } from './db.js';
+
+// Identificadores de la plantilla de EmailJS usada para enviar el resumen de auditoría.
 const EMAILJS_SERVICE_ID  = 'service_31xahnu';
 const EMAILJS_TEMPLATE_ID = 'template_nlyhaax';
 const EMAILJS_PUBLIC_KEY  = 'luPQ8D0azYx7Upw6f';
 
+// Envía a EmailJS el destinatario, el asunto, el contenido HTML y los datos del auditor.
 const enviarEmailJS = (destino, asunto, htmlMensaje, nombreAuditor, emailAuditor) =>
   fetch('https://api.emailjs.com/api/v1.0/email/send', {
     method: 'POST',
@@ -25,7 +28,7 @@ const enviarEmailJS = (destino, asunto, htmlMensaje, nombreAuditor, emailAuditor
     })
   });
 
-// --- TABLAS OFICIALES AQL (ISO 2859-1 / ANSI ASQ Z1.4) ---
+// La primera tabla convierte el tamaño del lote y el nivel de inspección en una letra código.
 const TABLA_I = [
   { min: 2, max: 8, 'S-1': 'A', 'S-2': 'A', 'S-3': 'A', 'S-4': 'A', 'I': 'A', 'II': 'A', 'III': 'B' },
   { min: 9, max: 15, 'S-1': 'A', 'S-2': 'A', 'S-3': 'A', 'S-4': 'A', 'I': 'A', 'II': 'B', 'III': 'C' },
@@ -41,7 +44,7 @@ const TABLA_I = [
   { min: 10001, max: 35000, 'S-1': 'C', 'S-2': 'D', 'S-3': 'F', 'S-4': 'H', 'I': 'K', 'II': 'M', 'III': 'N' }
 ];
 
-// Matriz maestra con resolución de flechas de muestreo para todos los niveles AQL
+// Para cada letra código y valor AQL, define el tamaño de muestra y los límites Ac/Re.
 const AQL_PLANS = {
   A: { n: 2, plans: { '0.65': { ac: 0, re: 1, n: 20 }, '1.0': { ac: 0, re: 1, n: 13 }, '1.5': { ac: 0, re: 1, n: 8 }, '2.5': { ac: 0, re: 1, n: 5 }, '4.0': { ac: 0, re: 1, n: 3 }, '6.5': { ac: 0, re: 1, n: 2 } } },
   B: { n: 3, plans: { '0.65': { ac: 0, re: 1, n: 20 }, '1.0': { ac: 0, re: 1, n: 13 }, '1.5': { ac: 0, re: 1, n: 8 }, '2.5': { ac: 0, re: 1, n: 5 }, '4.0': { ac: 0, re: 1, n: 3 }, '6.5': { ac: 0, re: 1, n: 2 } } },
@@ -64,6 +67,7 @@ const AQL_PLANS = {
 const normAql = (val) => {
   if (!val) return '';
   const s = String(val).replace(',', '.').trim();
+  // Unifica formatos equivalentes para que coincidan con las claves de AQL_PLANS.
   if (s === '1') return '1.0';
   if (s === '4') return '4.0';
   return s;
@@ -71,13 +75,17 @@ const normAql = (val) => {
 
 const STORAGE_KEY = 'auditorias_textil_local_db';
 
+// Reúne el formulario de auditoría, su historial y las acciones para consultar y exportar registros.
 function Auditoria({ usuario, onLogout }) {
+  // Estado del historial y de los paneles/avisos de la interfaz.
   const [historialAuditorias, setHistorialAuditorias] = useState([]);
+  // Mantiene el registro elegido para consultar separado de los datos editables del formulario.
   const [isHistorialOpen, setIsHistorialOpen] = useState(false);
   const [registroVisualizar, setRegistroVisualizar] = useState(null);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  // Estado temporal para mostrar avisos y configurar el correo antes de enviarlo.
   const [toastMessage, setToastMessage] = useState("");
   const [emailDestinatarios, setEmailDestinatarios] = useState([]);
   const [mensajeAdicional, setMensajeAdicional] = useState("");
@@ -87,6 +95,7 @@ function Auditoria({ usuario, onLogout }) {
   const [archivosExtra, setArchivosExtra] = useState([]);
   const [empresaSugerencias, setEmpresaSugerencias] = useState(false);
 
+  // Datos de identificación del lote y opciones predefinidas que se sugieren en el formulario.
   const EMPRESAS = ['10 AL NORTE', 'VIVETEXTIL', 'GREENT', 'GRIS VERDE'];
 
   const initialFormData = {
@@ -101,6 +110,7 @@ function Auditoria({ usuario, onLogout }) {
   };
   const [formData, setFormData] = useState(initialFormData);
 
+  // Hallazgos que se capturan durante la inspección; se reinician al comenzar una auditoría nueva.
   const initialAuditResults = {
     defectos: { criticos: 0, mayores: 0, menores: 0 },
     segundas: { tela: 0, confeccion: 0, proceso: 0 },
@@ -109,18 +119,19 @@ function Auditoria({ usuario, onLogout }) {
   };
   const [auditResults, setAuditResults] = useState(initialAuditResults);
 
+  // Muestra un aviso breve para confirmar acciones o comunicar validaciones al usuario.
   const triggerToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 4000);
   };
 
   useEffect(() => {
-    // Cargar desde localStorage primero (rápido)
+    // Muestra primero la copia local para que el historial aparezca sin esperar a la red.
     try {
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) setHistorialAuditorias(JSON.parse(data));
     } catch (e) { console.error(e); }
-    // Luego sincronizar con Firestore
+    // Después consulta Firestore; si devuelve registros, reemplaza y actualiza la copia local.
     cargarDeFirestore(usuario.email).then(registros => {
       if (registros.length > 0) {
         setHistorialAuditorias(registros);
@@ -129,6 +140,7 @@ function Auditoria({ usuario, onLogout }) {
     });
   }, []);
 
+  // Restablece lote y hallazgos sin modificar el historial de auditorías guardadas.
   const limpiarFormulario = () => {
     setFormData(initialFormData);
     setAuditResults(initialAuditResults);
@@ -137,8 +149,9 @@ function Auditoria({ usuario, onLogout }) {
     triggerToast("Formulario reiniciado en ceros");
   };
 
-  // Cálculo en tiempo real del Plan de Muestreo AQL
+  // Deriva la letra código, muestra y límites de aceptación/rechazo a partir de los datos del lote.
   const planMuestreo = useMemo(() => {
+    // Admite separadores comunes al escribir el tamaño del lote.
     const cleanLoteStr = String(formData.tamañoLote || '').replace(/\./g, '').replace(/,/g, '').trim();
     const lote = parseInt(cleanLoteStr, 10);
     const nivel = formData.nivelInspeccion;
@@ -156,6 +169,7 @@ function Auditoria({ usuario, onLogout }) {
       };
     }
 
+    // Busca el rango de la tabla; para lotes fuera de los rangos usa la regla de extensión existente.
     const filaTabla = TABLA_I.find(r => lote >= r.min && lote <= r.max);
     const letra = filaTabla 
       ? (filaTabla[nivel] || 'A') 
@@ -186,6 +200,7 @@ function Auditoria({ usuario, onLogout }) {
       if (pMen.n) nMen = pMen.n;
     }
 
+    // Se inspecciona el mayor de los tamaños requeridos por ambos AQL, sin superar el lote real.
     const nCalculada = Math.min(lote, Math.max(nMay, nMen));
 
     return {
@@ -200,7 +215,7 @@ function Auditoria({ usuario, onLogout }) {
     };
   }, [formData.tamañoLote, formData.nivelInspeccion, formData.aqlMayores, formData.aqlMenores]);
 
-  // Decisión Final
+  // Dictamina rechazo al alcanzar Re (o superar el límite crítico); aprueba si hay un plan AQL válido.
   const decisionFinal = useMemo(() => {
     if (planMuestreo.letra === '--') {
       return { estado: 'ESPERANDO', texto: 'Esperando datos del lote', clase: 'text-slate-400 bg-slate-100 border-slate-200' };
@@ -236,6 +251,7 @@ function Auditoria({ usuario, onLogout }) {
     return { estado: 'PENDIENTE', texto: 'Configure AQL para dictaminar', clase: 'text-amber-700 bg-amber-50 border-amber-300' };
   }, [planMuestreo, auditResults.defectos, formData.criticosAcRe]);
 
+  // Resume las segundas por causa y calcula su proporción con respecto al tamaño del lote.
   const totalSegundas = (auditResults.segundas.confeccion || 0) + (auditResults.segundas.tela || 0) + (auditResults.segundas.proceso || 0);
   const porcentajeSegundas = useMemo(() => {
     const lote = parseInt(formData.tamañoLote, 10);
@@ -243,11 +259,13 @@ function Auditoria({ usuario, onLogout }) {
     return ((totalSegundas / lote) * 100).toFixed(2) + '%';
   }, [totalSegundas, formData.tamañoLote]);
 
+  // Mantiene sincronizado el formulario mediante el atributo name de cada campo.
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Actualiza un hallazgo anidado y evita guardar cantidades negativas o valores no numéricos.
   const handleAuditChange = (categoria, campo, valor) => {
     setAuditResults(prev => ({
       ...prev,
@@ -259,7 +277,7 @@ function Auditoria({ usuario, onLogout }) {
   };
 
   // --- FOTOS DE EVIDENCIA (desde archivos / galería / cámara) ---
-  // Convierte la imagen a base64 y la comprime para no llenar el localStorage
+  // Convierte cada imagen a JPEG reducido para limitar el espacio usado por localStorage.
   const comprimirImagen = (file) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -268,6 +286,7 @@ function Auditoria({ usuario, onLogout }) {
         const img = new Image();
         img.onerror = reject;
         img.onload = () => {
+          // Limita el lado más largo a 700 px y conserva la proporción original.
           const MAX = 700;
           const escala = Math.min(1, MAX / Math.max(img.width, img.height));
           const canvas = document.createElement('canvas');
@@ -285,6 +304,7 @@ function Auditoria({ usuario, onLogout }) {
       reader.readAsDataURL(file);
     });
 
+  // Comprime en paralelo las fotos seleccionadas y las agrega a la auditoría en curso.
   const handleFotos = async (e) => {
     const archivos = Array.from(e.target.files || []);
     if (archivos.length === 0) return;
@@ -299,17 +319,19 @@ function Auditoria({ usuario, onLogout }) {
     e.target.value = ''; // permite volver a elegir la misma foto
   };
 
+  // Retira de la evidencia únicamente la imagen cuyo identificador coincide.
   const quitarFoto = (id) => {
     setAuditResults(prev => ({ ...prev, fotos: prev.fotos.filter(f => f.id !== id) }));
   };
 
-  // Guardado directo en la base de datos interna de la aplicación (localStorage)
+  // Valida los campos mínimos, crea el registro y lo guarda localmente antes de sincronizarlo.
   const guardarAuditoria = (correoInfo = null) => {
     if (!formData.empresa || !formData.referencia || !formData.tamañoLote) {
       triggerToast("Completa al menos Empresa, Referencia y Tamaño de Lote");
       return false;
     }
 
+    // Congela en el registro tanto los datos ingresados como los cálculos vigentes al guardar.
     const nuevoRegistro = {
       id: Date.now(),
       auditor: usuario.email,
@@ -339,7 +361,7 @@ function Auditoria({ usuario, onLogout }) {
 
     const nuevaLista = [nuevoRegistro, ...historialAuditorias];
 
-    // Primero intentamos guardar; si la memoria está llena, no se pierde nada
+    // La copia local es el primer guardado; si falla, no se actualiza el historial de la pantalla.
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(nuevaLista));
     } catch (e) {
@@ -349,13 +371,14 @@ function Auditoria({ usuario, onLogout }) {
     }
 
     setHistorialAuditorias(nuevaLista);
-    // Guardar también en Firestore
+    // Firestore recibe una copia remota; db.js omite el contenido de las fotos para el documento.
     guardarEnFirestore({ ...nuevoRegistro, fotos: auditResults.fotos })
       .then(() => triggerToast("¡Auditoría guardada en la base de datos!"))
       .catch(() => triggerToast("¡Auditoría guardada localmente!"));
     return nuevoRegistro;
   };
 
+  // Elimina el registro de la copia local y, si tiene identificador remoto, también de Firestore.
   const eliminarRegistro = (id) => {
     const item = historialAuditorias.find(x => x.id === id);
     const filtrados = historialAuditorias.filter(x => x.id !== id);
@@ -366,7 +389,7 @@ function Auditoria({ usuario, onLogout }) {
     triggerToast("Registro eliminado de la base de datos");
   };
 
-  // Descarga un archivo (Blob/File) en el equipo
+  // Crea un enlace temporal para iniciar la descarga y luego libera su URL de memoria.
   const descargarBlob = (blob, nombre) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -378,7 +401,7 @@ function Auditoria({ usuario, onLogout }) {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   };
 
-  // PDF individual (mismo reporte del Excel, con las fotos de evidencia)
+  // Genera el reporte PDF del registro y comunica el resultado mediante avisos de la interfaz.
   const descargarPdfIndividual = async (registro) => {
     try {
       triggerToast("Generando PDF...");
@@ -391,26 +414,31 @@ function Auditoria({ usuario, onLogout }) {
     }
   };
 
-  // Archivos que la persona elige desde su equipo para adjuntar al correo
+  // Mantiene en memoria y muestra en el modal los archivos adicionales seleccionados.
   const handleArchivosExtra = (e) => {
     const nuevos = Array.from(e.target.files || []);
     if (nuevos.length) setArchivosExtra(prev => [...prev, ...nuevos]);
     e.target.value = '';
   };
 
+  // Quita del listado del modal el archivo seleccionado por su posición.
   const quitarArchivoExtra = (idx) => {
     setArchivosExtra(prev => prev.filter((_, i) => i !== idx));
   };
 
+  // Indica si el navegador se identifica como móvil mediante su user agent.
   const esMovil = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
+  // Prepara el resumen HTML y solicita a EmailJS el envío con los datos del auditor.
   const handleEnviarCorreo = async () => {
+    // Si no se ingresaron destinatarios, usa el correo operativo predeterminado.
     const destino = emailDestinatarios.length > 0 ? emailDestinatarios.join(',') : "10ALNORTESAS@GMAIL.COM";
     const mensaje = mensajeAdicional.trim();
     const esAprobado = decisionFinal?.estado === 'APROBADO';
 
     const asunto = `Reporte Auditoría · ${formData.empresa} · Lote ${formData.loteNum || 'S/N'} · ${decisionFinal?.estado || ''}`;
 
+    // El cuerpo del mensaje resume lote, dictamen, defectos y datos de quien envía.
     const htmlCorreo = `
 <!DOCTYPE html>
 <html lang="es">
@@ -523,6 +551,8 @@ function Auditoria({ usuario, onLogout }) {
 </body>
 </html>`;
 
+    // Esta solicitud manda el resumen HTML; los controles de PDF y archivos extra no se adjuntan aquí.
+    // Deshabilita temporalmente el formulario mientras se realiza la solicitud.
     setEnviando(true);
     try {
       const res = await enviarEmailJS(destino, asunto, htmlCorreo, usuario.nombre, usuario.email);
@@ -540,6 +570,7 @@ function Auditoria({ usuario, onLogout }) {
     setTimeout(() => setCorreoEnviado(false), 5000);
   };
 
+  // Copia los campos de un registro existente al formulario para revisarlo o reutilizarlo.
   const cargarRegistro = (item) => {
     setFormData({
       empresa: item.empresa || '',
@@ -561,7 +592,7 @@ function Auditoria({ usuario, onLogout }) {
     triggerToast("Auditoría Lote #" + (item.loteNum || 'S/N') + " cargada en formulario");
   };
 
-  // Motor de descarga individual a Microsoft Excel (.xls con formato y colores)
+  // Construye una hoja HTML compatible con Excel para descargar el reporte de un registro.
   const descargarExcelIndividual = (registro) => {
     const nombreLote = registro.loteNum ? String(registro.loteNum).replace(/[^a-zA-Z0-9]/g, '_') : 'SN';
     const empresa = (registro.empresa || 'Empresa').replace(/[^a-zA-Z0-9]/g, '_');
@@ -675,6 +706,7 @@ function Auditoria({ usuario, onLogout }) {
       </html>
     `;
 
+    // Exporta HTML tabular con extensión .xls, formato que Excel puede abrir directamente.
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -687,7 +719,7 @@ function Auditoria({ usuario, onLogout }) {
     triggerToast("Descargando reporte en Excel...");
   };
 
-  // Exportar todas las auditorías juntas en una sola hoja consolidada
+  // Exporta el historial visible como una tabla consolidada; no crea un archivo si está vacío.
   const descargarTodasEnExcel = () => {
     if (historialAuditorias.length === 0) {
       triggerToast("No hay registros en la base de datos para exportar");
@@ -740,6 +772,7 @@ function Auditoria({ usuario, onLogout }) {
       </html>
     `;
 
+    // El consolidado utiliza el mismo formato HTML compatible con Excel que el reporte individual.
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -755,7 +788,7 @@ function Auditoria({ usuario, onLogout }) {
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800 flex flex-col relative antialiased selection:bg-indigo-500 selection:text-white">
       
-      {/* Notificación Toast Flotante */}
+      {/* Aviso global no bloqueante para validaciones, guardados y descargas. */}
       {toastMessage && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 w-[92%] sm:w-auto max-w-md bg-slate-900 text-white px-4 sm:px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-[60] border border-slate-700">
           <svg className="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"/></svg>
@@ -763,7 +796,7 @@ function Auditoria({ usuario, onLogout }) {
         </div>
       )}
 
-      {/* ENCABEZADO */}
+      {/* Encabezado persistente: marca, accesos principales y datos del usuario autenticado. */}
       <header className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3 flex items-center justify-between gap-3 shadow-sm sticky top-0 z-20">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex flex-col items-start leading-none">
@@ -828,7 +861,7 @@ function Auditoria({ usuario, onLogout }) {
         </div>
       </header>
 
-      {/* CONTENIDO PRINCIPAL */}
+      {/* Formulario principal: identificación del lote, muestreo calculado y resultados. */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-3 sm:p-6 lg:p-8 pb-28 sm:pb-8 space-y-4 sm:space-y-6">
         <div className="flex justify-between items-center text-xs text-slate-500">
           <span>Fecha de auditoría: <strong>{new Date().toLocaleDateString('es-CO')}</strong></span>
@@ -841,7 +874,7 @@ function Auditoria({ usuario, onLogout }) {
           </button>
         </div>
 
-        {/* 1. DATOS DEL LOTE */}
+        {/* Los datos del lote y los parámetros seleccionados alimentan los cálculos AQL. */}
         <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="bg-slate-50/80 px-4 sm:px-6 py-3.5 border-b border-slate-200 flex justify-between items-center">
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
@@ -854,6 +887,7 @@ function Auditoria({ usuario, onLogout }) {
           </div>
 
           <div className="p-4 sm:p-6 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+            {/* La empresa admite texto libre o selección filtrada entre las plantas sugeridas. */}
             <div className="space-y-1.5 col-span-2 lg:col-span-1 relative">
               <label className="text-xs font-bold text-slate-600 uppercase">Empresa</label>
               <div className="relative">
@@ -896,6 +930,7 @@ function Auditoria({ usuario, onLogout }) {
               </div>
             </div>
 
+            {/* Referencia, lote y unidades identifican el lote que se inspecciona. */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-600 uppercase">Referencia</label>
               <input 
@@ -933,6 +968,7 @@ function Auditoria({ usuario, onLogout }) {
               />
             </div>
 
+            {/* Nivel de inspección y AQL determinan la letra código y los límites Ac/Re. */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-600 uppercase">Nivel de Inspección</label>
               <select 
@@ -1002,7 +1038,7 @@ function Auditoria({ usuario, onLogout }) {
           </div>
         </section>
 
-        {/* 2. PLAN DE MUESTREO (AUTOMÁTICO) */}
+        {/* Valores derivados de TABLA_I y AQL_PLANS; se actualizan con los parámetros del lote. */}
         <section className="bg-slate-900 text-white rounded-2xl shadow-xl overflow-hidden border border-slate-800">
           <div className="bg-slate-950 px-4 sm:px-6 py-4 border-b border-slate-800 flex justify-between items-center">
             <h2 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
@@ -1042,7 +1078,7 @@ function Auditoria({ usuario, onLogout }) {
           </div>
         </section>
 
-        {/* 3. RESULTADOS DE LA AUDITORÍA & SEGUNDAS */}
+        {/* Resumen de defectos, dictamen y segundas; la captura detallada está en el panel lateral. */}
         <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="bg-slate-50/80 px-4 sm:px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1062,6 +1098,7 @@ function Auditoria({ usuario, onLogout }) {
             </button>
           </div>
 
+          {/* Resume el dictamen calculado, el conteo por severidad y las segundas por causa. */}
           <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className={`p-6 rounded-2xl border flex flex-col items-center justify-center text-center ${decisionFinal.clase}`}>
               <p className="text-xs font-bold uppercase tracking-wider mb-2">Decisión de Auditoría</p>
@@ -1119,7 +1156,7 @@ function Auditoria({ usuario, onLogout }) {
 
       </main>
 
-      {/* BARRA INFERIOR SOLO MÓVIL */}
+      {/* En móvil repite las acciones principales que no caben en el encabezado de escritorio. */}
       <nav
         className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 grid grid-cols-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
@@ -1138,7 +1175,7 @@ function Auditoria({ usuario, onLogout }) {
         </button>
       </nav>
 
-      {/* --- PESTAÑA LATERAL DESPLEGABLE (DRAWER) --- */}
+      {/* El panel lateral permite editar defectos, segundas, comentarios y fotos de evidencia. */}
       {isDrawerOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity"
@@ -1166,6 +1203,7 @@ function Auditoria({ usuario, onLogout }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          {/* Los defectos críticos, mayores y menores alimentan el dictamen de aceptación. */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b pb-2 flex justify-between items-center">
               <span>Defectos Encontrados</span>
@@ -1210,6 +1248,7 @@ function Auditoria({ usuario, onLogout }) {
             </div>
           </div>
 
+          {/* Clasifica las segundas según el origen del problema para calcular su total y porcentaje. */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b pb-2">
               Clasificación de Segundas
@@ -1251,6 +1290,7 @@ function Auditoria({ usuario, onLogout }) {
             </div>
           </div>
 
+          {/* Observaciones y fotos se conservan como evidencia asociada al registro. */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b pb-2">
               Comentarios y Evidencias
@@ -1300,6 +1340,7 @@ function Auditoria({ usuario, onLogout }) {
           </div>
         </div>
 
+        {/* Cerrar el drawer conserva los cambios en el estado de la auditoría en curso. */}
         <div className="p-4 border-t border-slate-200 bg-slate-50">
           <button 
             type="button"
@@ -1311,7 +1352,7 @@ function Auditoria({ usuario, onLogout }) {
         </div>
       </aside>
 
-      {/* --- PANEL MODAL: BASE DE DATOS / HISTORIAL --- */}
+      {/* Historial sincronizado, con consulta, exportación, reutilización y eliminación de registros. */}
       {isHistorialOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
@@ -1352,6 +1393,7 @@ function Auditoria({ usuario, onLogout }) {
               </div>
             </div>
 
+            {/* Si hay registros se muestra una fila por auditoría; de lo contrario, instrucciones iniciales. */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-3 flex-1">
               {historialAuditorias.length === 0 ? (
                 <div className="text-center py-12 text-slate-400 space-y-2">
@@ -1360,6 +1402,7 @@ function Auditoria({ usuario, onLogout }) {
                   <p className="text-xs">Diligencia los datos del lote y haz clic en <strong>"Guardar en BD"</strong> o <strong>"Enviar Correo"</strong>.</p>
                 </div>
               ) : (
+                {/* Cada fila resume un registro y ofrece consulta, exportación, carga y eliminación. */}
                 historialAuditorias.map((item) => (
                   <div 
                     key={item.id} 
@@ -1449,7 +1492,7 @@ function Auditoria({ usuario, onLogout }) {
         </div>
       )}
 
-      {/* --- MODAL DETALLADO DEL OJITO (VISUALIZADOR COMPLETO CON DESCARGA A EXCEL) --- */}
+      {/* Detalle de solo consulta del registro elegido; permite descargarlo o cargarlo para editar. */}
       {registroVisualizar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
           <div 
@@ -1505,7 +1548,7 @@ function Auditoria({ usuario, onLogout }) {
               </div>
             </div>
 
-            {/* Contenido Completo del Registro */}
+            {/* La vista se organiza en dictamen, datos del lote, plan, hallazgos y evidencia. */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-slate-800">
               
               {/* Banner de Decisión Final */}
@@ -1703,7 +1746,7 @@ function Auditoria({ usuario, onLogout }) {
         </div>
       )}
 
-      {/* --- OVERLAY CONFIRMACIÓN CORREO ENVIADO --- */}
+      {/* Confirmación visual al finalizar la solicitud; el estado no verifica la respuesta del servidor. */}
       {correoEnviado && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white border-4 border-emerald-400 rounded-3xl shadow-2xl px-10 py-10 flex flex-col items-center gap-4">
@@ -1718,7 +1761,7 @@ function Auditoria({ usuario, onLogout }) {
         </div>
       )}
 
-      {/* --- MODAL CENTRADO DE ENVÍO DE CORREO --- */}
+      {/* Modal de correo para definir destinatarios y redactar un mensaje complementario. */}
       {isEmailModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -1736,6 +1779,7 @@ function Auditoria({ usuario, onLogout }) {
               </button>
             </div>
             <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              {/* Permite escribir una dirección y combinarla con contactos predefinidos seleccionados. */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Destinatario</label>
                 <input
@@ -1785,6 +1829,7 @@ function Auditoria({ usuario, onLogout }) {
                   })}
                 </div>
               </div>
+              {/* El mensaje se inserta en el cuerpo HTML junto con el resumen de la auditoría. */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Mensaje Adicional</label>
                 <textarea
@@ -1795,6 +1840,7 @@ function Auditoria({ usuario, onLogout }) {
                   className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none"
                 />
               </div>
+              {/* Los adjuntos se muestran y pueden quitarse, pero no se incluyen en la llamada a EmailJS. */}
               <div className="space-y-2">
                 <label className="w-full flex items-center gap-3 bg-slate-100 hover:bg-slate-200 border border-slate-300 p-3 rounded-xl cursor-pointer transition-colors">
                   <svg className="w-5 h-5 text-slate-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
@@ -1813,6 +1859,7 @@ function Auditoria({ usuario, onLogout }) {
                 )}
               </div>
             </div>
+            {/* Cancelar cierra el modal; enviar delega la solicitud y se bloquea mientras está activa. */}
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
               <button type="button" onClick={() => setIsEmailModalOpen(false)} className="px-4 py-2.5 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-semibold transition-colors cursor-pointer">Cancelar</button>
               <button type="button" onClick={handleEnviarCorreo} disabled={enviando} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-all shadow flex items-center gap-2 cursor-pointer disabled:opacity-60">
@@ -1829,12 +1876,15 @@ function Auditoria({ usuario, onLogout }) {
 }
 
 export default function App() {
+  // La sesión actual decide si se muestra el formulario de acceso o el módulo de auditoría.
   const [usuario, setUsuario] = useState(() => sesionActual());
 
+  // Mantiene el título de la pestaña alineado con el nombre de la aplicación.
   useEffect(() => {
     document.title = 'Crearte By Confeccionarte';
   }, []);
 
+  // Cierra la sesión de Firebase y vuelve a mostrar la pantalla de ingreso.
   const salir = () => {
     cerrarSesion();
     setUsuario(null);

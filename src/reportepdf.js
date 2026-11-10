@@ -1,18 +1,21 @@
-// Genera el reporte de auditoría en PDF (mismo contenido del Excel + fotos de evidencia).
-// Requiere:  npm install pdf-lib
+// Genera un PDF A4 con el resumen de auditoría y las fotos de evidencia locales.
+// pdf-lib dibuja texto, figuras e imágenes sin depender de un servidor.
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
+// Dimensiones de la página A4 en puntos PDF.
 const PAGE_W = 595.28; // A4
 const PAGE_H = 841.89;
+// Margen general y ancho útil entre márgenes.
 const M = 36;
 const W = PAGE_W - M * 2;
 
+// Convierte un color hexadecimal CSS en los componentes RGB requeridos por pdf-lib.
 const color = (hex) => {
   const n = parseInt(hex.replace('#', ''), 16);
   return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 };
 
-// Paleta Crearte: amarillo y negro
+// Colores de marca y estados utilizados para construir el reporte.
 const C = {
   amarillo: '#FACC15',
   indigo: '#111111',        // color de acento para valores (negro)
@@ -25,8 +28,9 @@ const C = {
   orange: '#EA580C', amber: '#CA8A04', amberBg: '#FEF3C7', amberTx: '#92400E'
 };
 
-// Helvetica del PDF solo soporta WinAnsi: se limpian caracteres raros (emojis, flechas, etc.)
+// Caracteres tipográficos adicionales que la codificación WinAnsi de Helvetica admite.
 const ESPECIALES = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+// Limpia espacios especiales y reemplaza glifos incompatibles antes de dibujar texto.
 const limpiar = (t) =>
   Array.from(
     String(t ?? '')
@@ -35,12 +39,14 @@ const limpiar = (t) =>
   )
     .map((ch) => {
       const c = ch.codePointAt(0);
+      // Los saltos de línea se conservan; los demás caracteres se validan contra WinAnsi.
       if (ch === '\n') return ch;
       if ((c >= 32 && c <= 126) || (c >= 160 && c <= 255) || ESPECIALES.includes(ch)) return ch;
       return '?';
     })
     .join('');
 
+// Recorta el texto hasta que quepa en el ancho disponible y señala el truncamiento con puntos.
 const ajustar = (t, font, size, maxW) => {
   let s = limpiar(t).replace(/\n/g, ' ');
   if (font.widthOfTextAtSize(s, size) <= maxW) return s;
@@ -48,13 +54,16 @@ const ajustar = (t, font, size, maxW) => {
   return s + '...';
 };
 
+// Divide texto en líneas según el ancho de fuente; también parte palabras demasiado largas.
 const partir = (texto, font, size, maxW) => {
   const lineas = [];
+  // Cada párrafo original se procesa por separado para respetar los saltos de línea.
   limpiar(texto).split('\n').forEach((par) => {
     if (!par.trim()) { lineas.push(''); return; }
     let actual = '';
     par.split(' ').forEach((palabra) => {
       let pal = palabra;
+      // Si una palabra supera el ancho, se divide en fragmentos que puedan caber.
       while (font.widthOfTextAtSize(pal, size) > maxW) {
         let i = pal.length;
         while (i > 1 && font.widthOfTextAtSize(pal.slice(0, i), size) > maxW) i--;
@@ -62,6 +71,7 @@ const partir = (texto, font, size, maxW) => {
         lineas.push(pal.slice(0, i));
         pal = pal.slice(i);
       }
+      // Agrega la palabra a la línea actual o comienza una línea nueva si no cabe.
       const prueba = actual ? actual + ' ' + pal : pal;
       if (font.widthOfTextAtSize(prueba, size) <= maxW) actual = prueba;
       else { lineas.push(actual); actual = pal; }
@@ -71,36 +81,44 @@ const partir = (texto, font, size, maxW) => {
   return lineas;
 };
 
+// Produce un nombre de descarga con caracteres seguros a partir de empresa y lote.
 export const nombreArchivoPdf = (registro) => {
   const limpio = (v, def) => (String(v || def)).replace(/[^a-zA-Z0-9]/g, '_');
   return `Auditoria_${limpio(registro.empresa, 'Empresa')}_Lote_${limpio(registro.loteNum, 'SN')}.pdf`;
 };
 
+// Construye y serializa el reporte completo; devuelve los bytes para que App.jsx los descargue.
 export async function generarPdfAuditoria(registro) {
+  // Inicializa el documento, metadatos y fuentes estándar compatibles con pdf-lib.
   const pdf = await PDFDocument.create();
   pdf.setTitle('Reporte de Auditoría - Crearte By Confeccionarte');
   pdf.setAuthor('Crearte By Confeccionarte');
   const f = await pdf.embedFont(StandardFonts.Helvetica);
   const b = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+  // page es la página activa; y es la posición vertical usada por los bloques del informe.
   let page;
   let y;
 
+  // Dibuja texto saneado con opciones predeterminadas de fuente, tamaño y color.
   const texto = (t, x, yy, { font = f, size = 10, col = C.ink } = {}) =>
     page.drawText(limpiar(t), { x, y: yy, size, font, color: color(col) });
 
+  // Alinea el extremo derecho del texto con una coordenada horizontal.
   const textoDerecha = (t, xr, yy, opts = {}) => {
     const font = opts.font || f;
     const size = opts.size || 10;
     texto(t, xr - font.widthOfTextAtSize(limpiar(t), size), yy, opts);
   };
 
+  // Centra el texto respecto de una coordenada horizontal.
   const textoCentro = (t, xc, yy, opts = {}) => {
     const font = opts.font || f;
     const size = opts.size || 10;
     texto(t, xc - font.widthOfTextAtSize(limpiar(t), size) / 2, yy, opts);
   };
 
+  // Dibuja un rectángulo de relleno y/o borde; los colores son opcionales.
   const caja = (x, yy, w, h, fill, borde) =>
     page.drawRectangle({
       x, y: yy, width: w, height: h,
@@ -109,7 +127,8 @@ export async function generarPdfAuditoria(registro) {
       borderWidth: borde ? 0.6 : 0
     });
 
-  const nuevaPagina = (primera) => {
+    // Agrega una página y dibuja su encabezado inicial o el encabezado de continuación.
+    const nuevaPagina = (primera) => {
     page = pdf.addPage([PAGE_W, PAGE_H]);
     if (primera) {
       caja(0, PAGE_H - 66, PAGE_W, 66, C.indigoDark);
@@ -127,11 +146,12 @@ export async function generarPdfAuditoria(registro) {
     }
   };
 
+  // Reserva espacio para un bloque; si no cabe antes del pie, comienza otra página.
   const asegurar = (h) => {
     if (y - h < M + 24) nuevaPagina(false);
   };
 
-  // Barra de sección: fondo amarillo con texto negro
+  // Dibuja una barra de título de sección y avanza la posición vertical.
   const seccion = (titulo) => {
     asegurar(70);
     caja(M, y - 18, W, 18, C.amarillo);
@@ -139,7 +159,7 @@ export async function generarPdfAuditoria(registro) {
     y -= 18 + 6;
   };
 
-  // filas de 2 pares etiqueta/valor: [[l1, v1, colorOpcional], [l2, v2, colorOpcional]]
+  // Dibuja filas de etiquetas/valores; cada fila puede tener uno o dos pares.
   const filasClaveValor = (filas) => {
     const lw = W * 0.2;
     const vw = W * 0.3;
@@ -159,6 +179,7 @@ export async function generarPdfAuditoria(registro) {
     y -= 10;
   };
 
+  // Dibuja indicadores en tarjetas de igual ancho (por ejemplo, muestra y límites Ac/Re).
   const cajasDato = (items, alto = 46) => {
     asegurar(alto + 10);
     const gap = 6;
@@ -172,15 +193,18 @@ export async function generarPdfAuditoria(registro) {
     y -= alto + 10;
   };
 
-  // ---------------- CONTENIDO ----------------
+  // ---------------- DATOS Y RESULTADOS DEL INFORME ----------------
   nuevaPagina(true);
 
+  // Alias con valores vacíos por defecto para tolerar registros antiguos o incompletos.
   const plan = registro.planMuestreo || {};
   const def = registro.defectos || {};
   const seg = registro.segundas || {};
   const dec = registro.decision || {};
+  // Calcula el total de defectos que aparece en el resumen.
   const totalDef = (def.criticos || 0) + (def.mayores || 0) + (def.menores || 0);
 
+  // Datos de identificación del lote y parámetros AQL configurados.
   seccion('DATOS DEL LOTE');
   filasClaveValor([
     [['Empresa', registro.empresa || '-'], ['Referencia', registro.referencia || '-']],
@@ -189,6 +213,7 @@ export async function generarPdfAuditoria(registro) {
     [['AQL mayores', registro.aqlMayores || '-'], ['AQL menores', registro.aqlMenores || '-']]
   ]);
 
+  // Muestra la letra código, tamaño de muestra y umbrales de aceptación y rechazo.
   seccion('PLAN DE MUESTREO (ISO 2859-1)');
   cajasDato([
     { label: 'LETRA CÓDIGO', valor: plan.letra ?? '--', bg: C.ink, borde: C.ink, col: C.amarillo, labelCol: '#94A3B8' },
@@ -199,6 +224,7 @@ export async function generarPdfAuditoria(registro) {
     { label: 'RE MENORES', valor: plan.reMenores ?? '--', col: C.rose }
   ]);
 
+  // Conteos capturados y total agregado de defectos.
   seccion('RESULTADO DE LA AUDITORÍA (DEFECTOS)');
   cajasDato([
     { label: 'CRÍTICOS', valor: def.criticos ?? 0, col: C.rose },
@@ -207,7 +233,7 @@ export async function generarPdfAuditoria(registro) {
     { label: 'TOTAL DEFECTOS', valor: totalDef, col: C.ink }
   ]);
 
-  // Banner de decisión final
+  // Banner de decisión: color verde para aprobado, amarillo para pendiente y rojo para rechazo.
   {
     asegurar(52);
     const aprobado = dec.estado === 'APROBADO';
@@ -220,6 +246,7 @@ export async function generarPdfAuditoria(registro) {
     y -= 42 + 12;
   }
 
+  // Clasificación de segundas con total y porcentaje precalculados en el registro.
   seccion('CLASIFICACIÓN DE SEGUNDAS');
   cajasDato([
     { label: 'POR CONFECCIÓN', valor: seg.confeccion ?? 0 },
@@ -229,6 +256,7 @@ export async function generarPdfAuditoria(registro) {
     { label: '% SEGUNDAS', valor: seg.porcentaje || '0.00%', col: C.indigo }
   ]);
 
+  // Ajusta observaciones a la página y divide bloques largos en páginas sucesivas.
   seccion('OBSERVACIONES');
   {
     const lineas = partir(registro.comentarios || 'Sin observaciones registradas.', f, 10, W - 20);
@@ -249,6 +277,7 @@ export async function generarPdfAuditoria(registro) {
     y -= 4;
   }
 
+  // Añade los datos de autoría y correo asociados a la auditoría.
   const fotos = registro.fotos || [];
   filasClaveValor([
     [['Auditor', registro.auditor || '-'], ['Fecha y hora', registro.fecha || '-']],
@@ -263,6 +292,7 @@ export async function generarPdfAuditoria(registro) {
     texto('No se adjuntaron fotos en esta auditoría.', M, y - 12, { size: 10, col: C.slate500 });
     y -= 22;
   } else {
+    // Decodifica cada imagen base64 y la incorpora en el formato PNG o JPEG que corresponda.
     const imagenes = [];
     for (let i = 0; i < fotos.length; i++) {
       try {
@@ -277,6 +307,7 @@ export async function generarPdfAuditoria(registro) {
       }
     }
 
+    // Organiza las imágenes en dos columnas y limita su alto sin deformar la proporción.
     const gap = 12;
     const cw = (W - gap) / 2;
     const maxH = 210;
@@ -300,8 +331,9 @@ export async function generarPdfAuditoria(registro) {
     }
   }
 
-  // ---------------- PIE DE PÁGINA ----------------
+  // ---------------- PIE DE PÁGINA Y SERIALIZACIÓN ----------------
   const paginas = pdf.getPages();
+  // Agrega una línea, datos de auditoría y numeración a todas las páginas generadas.
   paginas.forEach((p, idx) => {
     page = p;
     page.drawLine({ start: { x: M, y: 34 }, end: { x: PAGE_W - M, y: 34 }, thickness: 0.5, color: color(C.slate200) });
@@ -312,5 +344,6 @@ export async function generarPdfAuditoria(registro) {
     textoDerecha(`Página ${idx + 1} de ${paginas.length}`, PAGE_W - M, 22, { size: 8, col: C.slate500 });
   });
 
+  // Devuelve el PDF como bytes para que la interfaz cree el archivo descargable.
   return pdf.save();
 }
