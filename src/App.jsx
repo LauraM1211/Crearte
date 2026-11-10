@@ -1402,7 +1402,7 @@ function Auditoria({ usuario, onLogout }) {
                   <p className="text-xs">Diligencia los datos del lote y haz clic en <strong>"Guardar en BD"</strong> o <strong>"Enviar Correo"</strong>.</p>
                 </div>
               ) : (
-                {/* Cada fila resume un registro y ofrece consulta, exportación, carga y eliminación. */}
+                /* Cada fila resume un registro y ofrece consulta, exportación, carga y eliminación. */
                 historialAuditorias.map((item) => (
                   <div 
                     key={item.id} 
