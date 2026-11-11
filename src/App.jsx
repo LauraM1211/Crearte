@@ -4,7 +4,7 @@ import { sesionActual, cerrarSesion } from './auth.js';
 import { generarPdfAuditoria, nombreArchivoPdf } from './reportepdf.js';
 import { guardarEnFirestore, cargarDeFirestore, eliminarDeFirestore, esAdmin } from './db.js';
 
-// Identificadores de la plantilla de EmailJS usada para enviar el resumen de auditoría.
+// Identificadores de la plantilla de usada para enviar el resumen de auditoría.
 const EMAILJS_SERVICE_ID  = 'service_31xahnu';
 const EMAILJS_TEMPLATE_ID = 'template_nlyhaax';
 const EMAILJS_PUBLIC_KEY  = 'ap1JwPqq4y6vCvg6I';
