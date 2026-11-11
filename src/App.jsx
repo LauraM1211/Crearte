@@ -7,7 +7,7 @@ import { guardarEnFirestore, cargarDeFirestore, eliminarDeFirestore, esAdmin } f
 // Identificadores de la plantilla de EmailJS usada para enviar el resumen de auditoría.
 const EMAILJS_SERVICE_ID  = 'service_31xahnu';
 const EMAILJS_TEMPLATE_ID = 'template_nlyhaax';
-const EMAILJS_PUBLIC_KEY  = 'luPQ8D0azYx7Upw6f';
+const EMAILJS_PUBLIC_KEY  = 'ap1JwPqq4y6vCvg6I';
 
 // Envía a EmailJS el destinatario, el asunto, el contenido HTML y los datos del auditor.
 const enviarEmailJS = (destino, asunto, htmlMensaje, nombreAuditor, emailAuditor) =>
