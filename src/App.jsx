@@ -73,12 +73,13 @@ const normAql = (val) => {
   return s;
 };
 
-const STORAGE_KEY = 'auditorias_textil_local_db';
+const STORAGE_KEY = (email) => `auditorias_textil_local_db:${String(email || '').trim().toLowerCase()}`;
 
 // Reúne el formulario de auditoría, su historial y las acciones para consultar y exportar registros.
 function Auditoria({ usuario, onLogout }) {
   // Estado del historial y de los paneles/avisos de la interfaz.
   const [historialAuditorias, setHistorialAuditorias] = useState([]);
+  const claveHistorialLocal = STORAGE_KEY(usuario.email);
   // Mantiene el registro elegido para consultar separado de los datos editables del formulario.
   const [isHistorialOpen, setIsHistorialOpen] = useState(false);
   const [registroVisualizar, setRegistroVisualizar] = useState(null);
@@ -128,15 +129,16 @@ function Auditoria({ usuario, onLogout }) {
   useEffect(() => {
     // Muestra primero la copia local para que el historial aparezca sin esperar a la red.
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
+      const data = localStorage.getItem(claveHistorialLocal);
       if (data) setHistorialAuditorias(JSON.parse(data));
     } catch (e) { console.error(e); }
     // Después consulta Firestore; si devuelve registros, reemplaza y actualiza la copia local.
     cargarDeFirestore(usuario.email).then(registros => {
-      if (registros.length > 0) {
-        setHistorialAuditorias(registros);
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(registros)); } catch (_) {}
-      }
+      setHistorialAuditorias(registros);
+      try { localStorage.setItem(claveHistorialLocal, JSON.stringify(registros)); } catch (_) {}
+    }).catch(error => {
+      console.error('No fue posible sincronizar el historial con Firestore:', error);
+      triggerToast('No se pudo cargar el historial en la nube. Revisa la conexión o los permisos de Firestore.');
     });
   }, []);
 
@@ -361,20 +363,29 @@ function Auditoria({ usuario, onLogout }) {
 
     const nuevaLista = [nuevoRegistro, ...historialAuditorias];
 
-    // La copia local es el primer guardado; si falla, no se actualiza el historial de la pantalla.
+    // La copia local es una caché; si falla, el guardado remoto aún debe continuar.
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nuevaLista));
+      localStorage.setItem(claveHistorialLocal, JSON.stringify(nuevaLista));
     } catch (e) {
       console.error(e);
-      triggerToast("Memoria llena: reduce el número de fotos o elimina registros antiguos");
-      return false;
+      triggerToast("El navegador no pudo guardar la copia local; se intentará guardar en la nube.");
     }
 
     setHistorialAuditorias(nuevaLista);
     // Firestore recibe una copia remota; db.js omite el contenido de las fotos para el documento.
     guardarEnFirestore({ ...nuevoRegistro, fotos: auditResults.fotos })
-      .then(() => triggerToast("¡Auditoría guardada en la base de datos!"))
-      .catch(() => triggerToast("¡Auditoría guardada localmente!"));
+      .then(firestoreId => {
+        const sincronizados = nuevaLista.map(item => item.id === nuevoRegistro.id
+          ? { ...item, _firestoreId: firestoreId }
+          : item);
+        setHistorialAuditorias(sincronizados);
+        try { localStorage.setItem(claveHistorialLocal, JSON.stringify(sincronizados)); } catch (_) {}
+        triggerToast("¡Auditoría guardada y sincronizada para las cuentas autorizadas!");
+      })
+      .catch(error => {
+        console.error('No fue posible guardar la auditoría en Firestore:', error);
+        triggerToast('Auditoría guardada solo en este navegador; no se sincronizó con la nube.');
+      });
     return nuevoRegistro;
   };
 
@@ -383,7 +394,7 @@ function Auditoria({ usuario, onLogout }) {
     const item = historialAuditorias.find(x => x.id === id);
     const filtrados = historialAuditorias.filter(x => x.id !== id);
     setHistorialAuditorias(filtrados);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(filtrados)); } catch (_) {}
+    try { localStorage.setItem(claveHistorialLocal, JSON.stringify(filtrados)); } catch (_) {}
     if (item?._firestoreId) eliminarDeFirestore(item._firestoreId);
     if (registroVisualizar && registroVisualizar.id === id) setRegistroVisualizar(null);
     triggerToast("Registro eliminado de la base de datos");

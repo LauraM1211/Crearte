@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function canSeeSharedHistory() {
+      return signedIn() && request.auth.token.email in [
+        'grupocontable2130@gmail.com',
+        'analista.calidad@crearte-sas.com'
+      ];
+    }
+
+    match /auditorias/{auditoriaId} {
+      allow read: if canSeeSharedHistory()
+        || (signedIn() && resource.data.auditor == request.auth.token.email);
+      allow create: if signedIn()
+        && request.resource.data.auditor == request.auth.token.email;
+      allow delete: if canSeeSharedHistory()
+        || (signedIn() && resource.data.auditor == request.auth.token.email);
+      allow update: if false;
+    }
+  }
+}

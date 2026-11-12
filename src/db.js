@@ -16,14 +16,17 @@ import { app } from './firebase.js';
 
 // Cuenta que la interfaz trata como administradora al cargar los registros.
 // La autorización real debe estar definida además en las reglas de Firestore.
-const ADMIN_EMAIL = 'grupocontable2130@gmail.com';
+const EMAILS_HISTORIAL_COMPARTIDO = new Set([
+  'grupocontable2130@gmail.com',
+  'analista.calidad@crearte-sas.com'
+]);
 
 // Cliente Firestore asociado a la aplicación Firebase.
 const db = getFirestore(app);
 
 // Compara correos sin distinguir espacios externos ni mayúsculas.
 export const esAdmin = (email) =>
-  String(email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  EMAILS_HISTORIAL_COMPARTIDO.has(String(email || '').trim().toLowerCase());
 
 // Añade una auditoría en la colección y devuelve el ID generado por Firestore.
 export const guardarEnFirestore = async (registro) => {
@@ -54,9 +57,8 @@ export const cargarDeFirestore = async (emailUsuario) => {
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ ...d.data(), _firestoreId: d.id }));
   } catch (e) {
-    // Informa el fallo y devuelve una lista vacía, que la interfaz interpreta como sin resultados.
     console.error('Error cargando Firestore:', e);
-    return [];
+    throw e;
   }
 };
 
