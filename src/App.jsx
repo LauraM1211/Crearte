@@ -1,6 +1,4 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import Login from './login.jsx';
-import { sesionActual, cerrarSesion } from './auth.js';
 import { generarPdfAuditoria, nombreArchivoPdf } from './reportepdf.js';
 import { guardarEnFirestore, cargarDeFirestore, eliminarDeFirestore, esAdmin } from './db.js';
 
@@ -76,7 +74,7 @@ const normAql = (val) => {
 const STORAGE_KEY = (email) => `auditorias_textil_local_db:${String(email || '').trim().toLowerCase()}`;
 
 // Reúne el formulario de auditoría, su historial y las acciones para consultar y exportar registros.
-function Auditoria({ usuario, onLogout }) {
+function Auditoria({ usuario }) {
   // Estado del historial y de los paneles/avisos de la interfaz.
   const [historialAuditorias, setHistorialAuditorias] = useState([]);
   const claveHistorialLocal = STORAGE_KEY(usuario.email);
@@ -854,21 +852,7 @@ function Auditoria({ usuario, onLogout }) {
             </button>
           </div>
 
-          {/* Usuario y salir */}
-          <div className="flex items-center gap-2 sm:pl-3 sm:border-l sm:border-slate-200">
-            <div className="hidden md:block text-right leading-tight">
-              <p className="text-xs font-bold text-slate-800 max-w-[160px] truncate">{usuario.nombre}</p>
-              <p className="text-[11px] text-slate-500 max-w-[160px] truncate">{usuario.email}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              title="Cerrar sesión"
-              className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 cursor-pointer"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-            </button>
-          </div>
+          <span className="text-xs font-semibold text-slate-500">Modo local</span>
         </div>
       </header>
 
@@ -1887,20 +1871,13 @@ function Auditoria({ usuario, onLogout }) {
 }
 
 export default function App() {
-  // La sesión actual decide si se muestra el formulario de acceso o el módulo de auditoría.
-  const [usuario, setUsuario] = useState(() => sesionActual());
+  // Identidad local para conservar el historial por navegador sin solicitar acceso.
+  const usuario = { nombre: 'Auditor', email: 'auditor-local' };
 
   // Mantiene el título de la pestaña alineado con el nombre de la aplicación.
   useEffect(() => {
     document.title = 'Crearte By Confeccionarte';
   }, []);
 
-  // Cierra la sesión de Firebase y vuelve a mostrar la pantalla de ingreso.
-  const salir = () => {
-    cerrarSesion();
-    setUsuario(null);
-  };
-
-  if (!usuario) return <Login onAuth={setUsuario} />;
-  return <Auditoria usuario={usuario} onLogout={salir} />;
+  return <Auditoria usuario={usuario} />;
 }
